@@ -1,0 +1,18 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# Python bytecode
+*.pyc
+__pycache__/
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ROS 2 specific files that should not be committed
+.ros/
+.DS_Store # macOS specific

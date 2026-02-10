@@ -1,0 +1,248 @@
+<?xml version="1.0"?>
+<robot name="my_circular_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- =================================================================================== -->
+  <!-- Propriedades e Constantes Globais -->
+  <!-- =================================================================================== -->
+  <xacro:property name="M_PI" value="3.1415926535897931" />
+  <xacro:property name="DEG_TO_RAD" value="${M_PI/180}" />
+
+  <!-- Dimensões do corpo base (circular) -->
+  <xacro:property name="base_radius" value="0.20" />  <!-- Raio da base em metros -->
+  <xacro:property name="base_height" value="0.10" />  <!-- Altura da base em metros -->
+  <xacro:property name="base_mass" value="5.0" />     <!-- Massa da base em kg -->
+
+  <!-- Dimensões e posição das rodas -->
+  <xacro:property name="wheel_radius" value="0.05" />
+  <xacro:property name="wheel_thickness" value="0.02" />
+  <xacro:property name="wheel_mass" value="0.5" />
+  <xacro:property name="wheel_offset_x" value="0.15" /> <!-- Distância do centro da base ao centro da roda -->
+  <xacro:property name="wheel_offset_y" value="0.17" /> <!-- Distância do centro da base ao centro da roda -->
+  <xacro:property name="wheel_offset_z" value="${-base_height/2 + wheel_radius}" />
+
+  <!-- Dimensões e posição da roda caster -->
+  <xacro:property name="caster_radius" value="0.03" />
+  <xacro:property name="caster_mass" value="0.1" />
+  <xacro:property name="caster_offset_x" value="-0.15" />
+  <xacro:property name="caster_offset_z" value="${-base_height/2 + caster_radius}" />
+
+  <!-- Dimensões e posição do Lidar -->
+  <xacro:property name="lidar_radius" value="0.03" />
+  <xacro:property name="lidar_height" value="0.04" />
+  <xacro:property name="lidar_mass" value="0.2" />
+  <xacro:property name="lidar_offset_x" value="0.10" />
+  <xacro:property name="lidar_offset_y" value="0.0" />
+  <xacro:property name="lidar_offset_z" value="${base_height/2 + lidar_height/2 + 0.01}" /> <!-- Acima da base -->
+
+  <!-- Dimensões e posição da Câmera -->
+  <xacro:property name="camera_size_x" value="0.03" />
+  <xacro:property name="camera_size_y" value="0.04" />
+  <xacro:property name="camera_size_z" value="0.03" />
+  <xacro:property name="camera_mass" value="0.1" />
+  <xacro:property name="camera_offset_x" value="0.18" />
+  <xacro:property name="camera_offset_y" value="0.0" />
+  <xacro:property name="camera_offset_z" value="${base_height/2 + camera_size_z/2 + 0.05}" /> <!-- Acima da base, um pouco mais alto que o lidar -->
+
+  <!-- =================================================================================== -->
+  <!-- Macros para Geometrias e Inércias Comuns -->
+  <!-- =================================================================================== -->
+
+  <!-- Macro para inércia de um cilindro -->
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertia ixx="${m*(3*r*r + h*h)/12}" ixy="0" ixz="0"
+             iyy="${m*(3*r*r + h*h)/12}" iyz="0"
+             izz="${m*r*r/2}" />
+  </xacro:macro>
+
+  <!-- Macro para inércia de uma esfera -->
+  <xacro:macro name="sphere_inertia" params="m r">
+    <inertia ixx="${2*m*r*r/5}" ixy="0" ixz="0"
+             iyy="${2*m*r*r/5}" iyz="0"
+             izz="${2*m*r*r/5}" />
+  </xacro:macro>
+
+  <!-- Macro para inércia de uma caixa -->
+  <xacro:macro name="box_inertia" params="m x y z">
+    <inertia ixx="${m*(y*y + z*z)/12}" ixy="0" ixz="0"
+             iyy="${m*(x*x + z*z)/12}" iyz="0"
+             izz="${m*(x*x + y*y)/12}" />
+  </xacro:macro>
+
+  <!-- =================================================================================== -->
+  <!-- Link Base (base_link) - ESTE É O ÚNICO LINK RAIZ DO MODELO -->
+  <!-- =================================================================================== -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${base_radius}" length="${base_height}"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${base_radius}" length="${base_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${base_mass}"/>
+      <xacro:cylinder_inertia m="${base_mass}" r="${base_radius}" h="${base_height}"/>
+    </inertial>
+  </link>
+
+  <!-- =================================================================================== -->
+  <!-- Base Footprint (frame virtual no chão) - FILHO DE base_link -->
+  <!-- =================================================================================== -->
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_footprint"/>
+    <!-- Posiciona o base_footprint no chão, abaixo do centro do base_link -->
+    <origin xyz="0 0 ${-base_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- =================================================================================== -->
+  <!-- Macro para Rodas (left_wheel_link, right_wheel_link) -->
+  <!-- =================================================================================== -->
+  <xacro:macro name="wheel" params="prefix parent_link reflect_y">
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${M_PI/2} 0 0"/> <!-- Roda rotacionada para ficar em pé -->
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_thickness}"/>
+        </geometry>
+        <material name="black">
+          <color rgba="0.1 0.1 0.1 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${M_PI/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_thickness}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${wheel_mass}"/>
+        <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius}" h="${wheel_thickness}"/>
+      </inertial>
+    </link>
+
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="${parent_link}"/>
+      <child link="${prefix}_wheel_link"/>
+      <!-- Posição da roda em relação ao centro da base -->
+      <origin xyz="${wheel_offset_x} ${reflect_y * wheel_offset_y} ${wheel_offset_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/> <!-- Eixo de rotação da roda (em torno do Y local) -->
+    </joint>
+  </xacro:macro>
+
+  <!-- Instancia as rodas -->
+  <xacro:wheel prefix="left" parent_link="base_link" reflect_y="1"/>
+  <xacro:wheel prefix="right" parent_link="base_link" reflect_y="-1"/>
+
+  <!-- =================================================================================== -->
+  <!-- Roda Caster (caster_wheel_link) -->
+  <!-- =================================================================================== -->
+  <link name="caster_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+      <material name="grey">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${caster_mass}"/>
+      <xacro:sphere_inertia m="${caster_mass}" r="${caster_radius}"/>
+    </inertial>
+  </link>
+
+  <joint name="caster_wheel_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="caster_wheel_link"/>
+    <!-- Posição da roda caster na frente/atrás da base -->
+    <origin xyz="${caster_offset_x} 0 ${caster_offset_z}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- =================================================================================== -->
+  <!-- Sensor Lidar (lidar_link) -->
+  <!-- =================================================================================== -->
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${lidar_radius}" length="${lidar_height}"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${lidar_radius}" length="${lidar_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${lidar_mass}"/>
+      <xacro:cylinder_inertia m="${lidar_mass}" r="${lidar_radius}" h="${lidar_height}"/>
+    </inertial>
+  </link>
+
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <!-- Posição do lidar acima da base -->
+    <origin xyz="${lidar_offset_x} ${lidar_offset_y} ${lidar_offset_z}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- =================================================================================== -->
+  <!-- Sensor Câmera (camera_link) -->
+  <!-- =================================================================================== -->
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${camera_size_x} ${camera_size_y} ${camera_size_z}"/>
+      </geometry>
+      <material name="green">
+        <color rgba="0 0.8 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${camera_size_x} ${camera_size_y} ${camera_size_z}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${camera_mass}"/>
+      <xacro:box_inertia m="${camera_mass}" x="${camera_size_x}" y="${camera_size_y}" z="${camera_size_z}"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <!-- Posição da câmera acima da base -->
+    <origin xyz="${camera_offset_x} ${camera_offset_y} ${camera_offset_z}" rpy="0 0 0"/>
+  </joint>
+
+</robot>
+
