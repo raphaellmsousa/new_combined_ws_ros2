@@ -89,7 +89,7 @@ def generate_launch_description():
         name='fake_lidar_publisher_node',
         output='screen',
     )
-    
+     
     # NOVO: Nó para a câmera real do pacote webcam_demo
     real_camera_node = Node(
         package='webcam_demo', # <--- Pacote da câmera real
