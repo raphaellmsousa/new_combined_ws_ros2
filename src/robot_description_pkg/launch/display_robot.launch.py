@@ -73,14 +73,19 @@ def generate_launch_description():
         ]
     )
 
-    # REMOVA COMPLETAMENTE A DEFINIÇÃO DO NÓ DA CÂMERA FAKE
-    # camera_publisher_node = Node(
-    #     package=package_name,
-    #     executable='camera_publisher',
-    #     name='camera_publisher_node',
-    #     output='screen',
-    #     parameters=[]
-    # )
+    # Nó da câmera fake
+    fake_camera_publisher_node = Node(
+        package=package_name,
+        executable='fake_camera_publisher', # Agora este executável existe graças ao setup.py
+        name='fake_camera_publisher_node',  # Nome do nó ROS 2
+        output='screen',
+        parameters=[],
+        remappings=[
+            ('/camera_fake', '/fake_camera/image_raw'), # <--- CORREÇÃO AQUI! Remapeia o tópico interno 'camera_fake'
+            # Se o seu nó fake também publica camera_info, você precisaria de outra linha:
+            # ('/camera_fake/camera_info', '/fake_camera/camera_info'),
+        ]
+    )
     
     # Lidar simulado - CORREÇÃO AQUI: Atribuir a uma variável
     fake_lidar_publisher_node = Node( # <--- ATRIBUÍDO A UMA VARIÁVEL
@@ -130,8 +135,8 @@ def generate_launch_description():
         rviz_node,
         simple_odom_publisher_node,
         fake_lidar_publisher_node,
-        # REMOVA ESTA LINHA: camera_publisher_node,
-        real_camera_node, # <--- ADICIONE ESTA LINHA para lançar a câmera real
+        fake_camera_publisher_node,
+        real_camera_node, 
         processor_node,
     ])
 

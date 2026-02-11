@@ -29,7 +29,8 @@ setup(
             'odometry_node = robot_description_pkg.odometry_node:main',
             'sensor_node = robot_description_pkg.sensor_node:main',
             'simple_odom = robot_description_pkg.simple_odom_publisher_node:main',
-            # 'camera_publisher = robot_description_pkg.camera_publisher_node:main',
+            #'camera_publisher = robot_description_pkg.camera_publisher_node:main',
+            'fake_camera_publisher = robot_description_pkg.camera_publisher_node_fake:main', # <--- ADICIONE/DESCOMENTE ESTA LINHA
             'fake_lidar = robot_description_pkg.fake_lidar_publisher_node:main',
         ],
     },

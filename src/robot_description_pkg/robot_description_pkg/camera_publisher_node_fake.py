@@ -10,7 +10,7 @@ class CameraPublisherNode(Node):
         super().__init__('camera_publisher_node')
         self.get_logger().info('Camera Publisher Node started.')
 
-        self.publisher_ = self.create_publisher(Image, 'camera/image_raw', 10)
+        self.publisher_ = self.create_publisher(Image, 'camera_fake', 10)
         self.timer = self.create_timer(0.1, self.timer_callback) # Publica a 10 Hz
         self.bridge = CvBridge()
         self.image_counter = 0
