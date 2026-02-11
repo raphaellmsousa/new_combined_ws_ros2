@@ -9,7 +9,7 @@ class FakeLidarPublisherNode(Node):
     def __init__(self):
         super().__init__('fake_lidar_publisher_node')
 
-        self.publisher_ = self.create_publisher(LaserScan, 'scan', 10)
+        self.publisher_ = self.create_publisher(LaserScan, 'scan_fake', 10)
 
         # 10 Hz
         self.timer = self.create_timer(0.1, self.timer_callback)

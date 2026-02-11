@@ -82,7 +82,7 @@ def generate_launch_description():
     #     parameters=[]
     # )
     
-   # Lidar simulado - CORREÇÃO AQUI: Atribuir a uma variável
+    # Lidar simulado - CORREÇÃO AQUI: Atribuir a uma variável
     fake_lidar_publisher_node = Node( # <--- ATRIBUÍDO A UMA VARIÁVEL
         package='robot_description_pkg',
         executable='fake_lidar',
