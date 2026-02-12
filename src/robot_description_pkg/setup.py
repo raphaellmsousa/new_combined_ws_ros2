@@ -11,7 +11,10 @@ setup(
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', glob(os.path.join('launch', '*launch.[pxy][yeml]'))),
+        # CORREÇÃO AQUI: Garante que o launch file com o nome correto seja copiado
+        ('share/' + package_name + '/launch', glob(os.path.join('launch', 'display_robot.launch.py'))),
+        # A linha abaixo é mais genérica, mas a de cima garante o arquivo específico
+        # ('share/' + package_name + '/launch', glob(os.path.join('launch', '*launch.[pxy][yeml]'))),
         ('share/' + package_name + '/urdf', glob(os.path.join('urdf', '*.urdf*'))),
         ('share/' + package_name + '/urdf', glob(os.path.join('urdf', '*.xacro'))),
         ('share/' + package_name + '/rviz', glob(os.path.join('rviz', '*.rviz'))),
@@ -29,10 +32,9 @@ setup(
             'odometry_node = robot_description_pkg.odometry_node:main',
             'sensor_node = robot_description_pkg.sensor_node:main',
             'simple_odom = robot_description_pkg.simple_odom_publisher_node:main',
-            #'camera_publisher = robot_description_pkg.camera_publisher_node:main',
-            'fake_camera_publisher = robot_description_pkg.camera_publisher_node_fake:main', # <--- ADICIONE/DESCOMENTE ESTA LINHA
+            # CORREÇÃO AQUI: Adiciona o executável para a câmera fake
+            'fake_camera_publisher = robot_description_pkg.camera_publisher_node_fake:main',
             'fake_lidar = robot_description_pkg.fake_lidar_publisher_node:main',
         ],
     },
 )
-

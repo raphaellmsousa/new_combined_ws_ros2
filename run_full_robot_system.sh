@@ -1,29 +1,57 @@
 #!/bin/bash
 
-# --- Configurações ---
+# --- Configurações Dinâmicas ---
+# Obtém o diretório onde o script está localizado
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Assume que a raiz do workspace é o mesmo diretório do script
+# Se o script estiver em um subdiretório do workspace (ex: ~/my_ws/scripts/run.sh),
+# você precisaria ajustar WORKSPACE_ROOT para subir um nível:
+# WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+WORKSPACE_ROOT="$SCRIPT_DIR"
+
 # Caminho para a instalação base do ROS 2 Jazzy
 ROS_DISTRO_SETUP="/opt/ros/jazzy/setup.bash"
 
 # Caminho para o setup do seu workspace ROS 2
-WORKSPACE_SETUP="$HOME/new_combined_ws/install/setup.bash"
+WORKSPACE_SETUP="$WORKSPACE_ROOT/install/setup.bash"
 
 # Nome do pacote principal do seu robô
 ROBOT_PACKAGE="robot_description_pkg"
 
-# Nome do launch file principal do seu robô (que agora não terá o LiDAR fake)
-ROBOT_LAUNCH_FILE="display_robot.launch.py"
+# Nome do launch file principal do seu robô
+ROBOT_LAUNCH_FILE="display_robot.launch.py" # <--- CORRIGIDO PARA O NOME CERTO
 
 # Nome do pacote do RPLIDAR
 RPLIDAR_PACKAGE="rplidar_ros"
-
-# Nome do launch file do RPLIDAR (que você já criou, por exemplo, rplidar_a1_launch.py)
-# Certifique-se de que este launch file está configurado com o frame_id correto (ex: lidar_link)
-RPLIDAR_LAUNCH_FILE="rplidar_a1_launch.py" # Ou rplidar_with_rviz_launch.py se preferir
 
 # Parâmetros para o RPLIDAR (ajuste conforme necessário)
 RPLIDAR_SERIAL_PORT="/dev/ttyUSB0"
 RPLIDAR_BAUDRATE="115200"
 RPLIDAR_FRAME_ID="lidar_link" # <--- MUITO IMPORTANTE: Deve ser o mesmo do seu URDF!
+
+# --- Argumentos de Linha de Comando para o Script ---
+# Estes serão os valores padrão se não forem passados ao script
+USE_FAKE_LIDAR="true"
+USE_FAKE_CAMERA="true"
+USE_REAL_CAMERA="false"
+USE_RVIZ="true" # Adicionado para controle do RViz
+
+# Processa os argumentos passados para este script
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --fake-lidar) USE_FAKE_LIDAR="true" ;;
+        --no-fake-lidar) USE_FAKE_LIDAR="false" ;;
+        --fake-camera) USE_FAKE_CAMERA="true" ;;
+        --no-fake-camera) USE_FAKE_CAMERA="false" ;;
+        --real-camera) USE_REAL_CAMERA="true" ;;
+        --no-real-camera) USE_REAL_CAMERA="false" ;;
+        --rviz) USE_RVIZ="true" ;;
+        --no-rviz) USE_RVIZ="false" ;;
+        *) echo "Uso: $0 [--fake-lidar|--no-fake-lidar] [--fake-camera|--no-fake-camera] [--real-camera|--no-real-camera] [--rviz|--no-rviz]"; exit 1 ;;
+    esac
+    shift
+done
 
 # --- Execução ---
 
@@ -36,41 +64,68 @@ else
     exit 1
 fi
 
-echo "--- Sourciando ambiente do workspace ($HOME/new_combined_ws) ---"
+echo "--- Sourciando ambiente do workspace ($WORKSPACE_ROOT) ---"
 if [ -f "$WORKSPACE_SETUP" ]; then
     source "$WORKSPACE_SETUP"
     echo "Ambiente do workspace sourciado com sucesso."
 else
-    echo "AVISO: Arquivo de setup do workspace não encontrado em $WORKSPACE_SETUP. Certifique-se de que o workspace foi compilado."
-    # Não saímos aqui, mas o launch file do seu robô pode falhar se o workspace não estiver sourciado.
+    echo "ERRO: Arquivo de setup do workspace não encontrado em $WORKSPACE_SETUP. Certifique-se de que o workspace foi compilado."
+    exit 1 # <--- SAÍDA AQUI, pois o launch file do robô não funcionará sem o workspace sourciado.
 fi
 
-echo "--- Compilando o workspace (se houver mudanças) ---"
-# Opcional: Adicionar um colcon build aqui para garantir que as últimas mudanças sejam compiladas
-# colcon build --symlink-install --packages-up-to $ROBOT_PACKAGE $RPLIDAR_PACKAGE
-# Ou um build completo:
-# colcon build --symlink-install
-# Por simplicidade, vamos assumir que você compila manualmente quando necessário.
-
 echo "--- Iniciando o sistema do robô (odometria, câmera, RViz, etc.) ---"
+echo "Configurações de sensores: Fake Lidar=$USE_FAKE_LIDAR, Fake Camera=$USE_FAKE_CAMERA, Real Camera=$USE_REAL_CAMERA, RViz=$USE_RVIZ"
+
+# Constrói a string de argumentos para o launch file
+LAUNCH_ARGS="use_fake_lidar:=$USE_FAKE_LIDAR \
+             use_fake_camera:=$USE_FAKE_CAMERA \
+             use_real_camera:=$USE_REAL_CAMERA \
+             use_rviz:=$USE_RVIZ"
+
 # O comando ros2 launch é executado em segundo plano (&) para que o script possa continuar
-ros2 launch "$ROBOT_PACKAGE" "$ROBOT_LAUNCH_FILE" &
+ros2 launch "$ROBOT_PACKAGE" "$ROBOT_LAUNCH_FILE" $LAUNCH_ARGS &
 ROBOT_LAUNCH_PID=$! # Salva o PID do processo do launch do robô
 
-echo "--- Iniciando o RPLIDAR real ---"
-# Usamos ros2 run aqui para ter mais controle sobre os parâmetros,
-# mas você pode usar seu launch file do RPLIDAR se ele já tiver os parâmetros corretos.
-ros2 run "$RPLIDAR_PACKAGE" rplidar_node \
-  --ros-args \
-  -p serial_port:="$RPLIDAR_SERIAL_PORT" \
-  -p serial_baudrate:="$RPLIDAR_BAUDRATE" \
-  -p frame_id:="$RPLIDAR_FRAME_ID" &
-RPLIDAR_NODE_PID=$! # Salva o PID do processo do nó do RPLIDAR
+RPLIDAR_NODE_PID="" # Inicializa o PID do RPLIDAR como vazio
 
-echo "Sistema completo iniciado. Pressione Ctrl+C para encerrar ambos os processos."
+if [ "$USE_FAKE_LIDAR" = "false" ]; then
+    echo "--- Iniciando o RPLIDAR real ---"
+    ros2 run "$RPLIDAR_PACKAGE" rplidar_node \
+      --ros-args \
+      -p serial_port:="$RPLIDAR_SERIAL_PORT" \
+      -p serial_baudrate:="$RPLIDAR_BAUDRATE" \
+      -p frame_id:="$RPLIDAR_FRAME_ID" &
+    RPLIDAR_NODE_PID=$! # Salva o PID do processo do nó do RPLIDAR
+else
+    echo "--- RPLIDAR real NÃO iniciado (use_fake_lidar está como true) ---"
+fi
+
+echo "Sistema completo iniciado. Pressione Ctrl+C para encerrar todos os processos."
+
+# Função para encerrar os processos em segundo plano
+cleanup() {
+    echo -e "\n--- Encerrando processos ---"
+    if [ -n "$ROBOT_LAUNCH_PID" ]; then
+        kill "$ROBOT_LAUNCH_PID" 2>/dev/null
+        wait "$ROBOT_LAUNCH_PID" 2>/dev/null
+    fi
+    if [ -n "$RPLIDAR_NODE_PID" ]; then
+        kill "$RPLIDAR_NODE_PID" 2>/dev/null
+        wait "$RPLIDAR_NODE_PID" 2>/dev/null
+    fi
+    echo "Todos os processos encerrados."
+    exit 0
+}
+
+# Captura Ctrl+C para chamar a função cleanup
+trap cleanup SIGINT
 
 # Espera pelos processos em segundo plano para que o script não termine imediatamente
+# O 'wait' é chamado dentro do trap para garantir que os processos sejam encerrados
+# antes do script terminar.
 wait $ROBOT_LAUNCH_PID
-wait $RPLIDAR_NODE_PID
+if [ -n "$RPLIDAR_NODE_PID" ]; then
+    wait $RPLIDAR_NODE_PID
+fi
 
 echo "Todos os processos encerrados."

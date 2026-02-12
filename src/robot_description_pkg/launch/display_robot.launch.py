@@ -21,11 +21,13 @@ def generate_launch_description():
     # Caminho para o arquivo de configuração do RViz
     rviz_config_path = os.path.join(pkg_share_dir, 'rviz', 'robot_display.rviz')
 
-    # Argumento para usar o joint_state_publisher_gui
-    use_jsp_gui = LaunchConfiguration('use_jsp_gui', default='true')
-
-    # Argumento para usar o RViz
-    use_rviz = LaunchConfiguration('use_rviz', default='true')
+    # --- Argumentos de Launch para controle de sensores e RViz ---
+    # Estes são os valores que o launch file espera receber
+    use_jsp_gui     = LaunchConfiguration('use_jsp_gui',     default='true')
+    use_rviz        = LaunchConfiguration('use_rviz',        default='true')
+    use_fake_lidar  = LaunchConfiguration('use_fake_lidar',  default='true')
+    use_fake_camera = LaunchConfiguration('use_fake_camera', default='false')
+    use_real_camera = LaunchConfiguration('use_real_camera', default='true')
 
     # Processa o arquivo XACRO para gerar o URDF final
     robot_description_content = ParameterValue(
@@ -62,40 +64,39 @@ def generate_launch_description():
     )
 
     # Nó de odometria simplificado (movimento circular)
-    # Usa o executável 'simple_odom' e o nome do nó ROS 2 'simple_odom_publisher_node'
     simple_odom_publisher_node = Node(
         package=package_name,
-        executable='simple_odom', # <--- Executável conforme definido em setup.py
-        name='simple_odom_publisher_node',  # <--- Nome do nó ROS 2
+        executable='simple_odom',
+        name='simple_odom_publisher_node',
         output='screen',
-        parameters=[
-            # Você pode adicionar parâmetros aqui se o seu nó de odometria precisar
-        ]
+        parameters=[]
     )
 
     # Nó da câmera fake
     fake_camera_publisher_node = Node(
         package=package_name,
-        executable='fake_camera_publisher', # Agora este executável existe graças ao setup.py
-        name='fake_camera_publisher_node',  # Nome do nó ROS 2
+        executable='fake_camera_publisher', # <--- DEVE CORRESPONDER AO NOME DO EXECUTÁVEL NO setup.py
+        name='fake_camera_publisher_node',
         output='screen',
         parameters=[],
         remappings=[
-            ('/camera_fake', '/fake_camera/image_raw'), # <--- CORREÇÃO AQUI! Remapeia o tópico interno 'camera_fake'
+            ('/camera_fake', '/fake_camera/image_raw'), # Remapeia o tópico interno 'camera_fake' para o tópico desejado
             # Se o seu nó fake também publica camera_info, você precisaria de outra linha:
             # ('/camera_fake/camera_info', '/fake_camera/camera_info'),
-        ]
+        ],
+        condition=launch.conditions.IfCondition(use_fake_camera) # <--- Condição para ativar/desativar
     )
-    
-    # Lidar simulado - CORREÇÃO AQUI: Atribuir a uma variável
-    fake_lidar_publisher_node = Node( # <--- ATRIBUÍDO A UMA VARIÁVEL
+
+    # Lidar simulado
+    fake_lidar_publisher_node = Node(
         package='robot_description_pkg',
         executable='fake_lidar',
         name='fake_lidar_publisher_node',
         output='screen',
+        condition=launch.conditions.IfCondition(use_fake_lidar) # <--- Condição para ativar/desativar
     )
-     
-    # NOVO: Nó para a câmera real do pacote webcam_demo
+
+    # Nó para a câmera real do pacote webcam_demo
     real_camera_node = Node(
         package='webcam_demo', # <--- Pacote da câmera real
         executable='camera',   # <--- Executável da câmera real (definido em webcam_demo/setup.py)
@@ -104,10 +105,11 @@ def generate_launch_description():
         parameters=[
             # Se o seu nó de câmera real precisar de parâmetros (ex: device_id, resolução), adicione aqui
             # Exemplo: {'device_id': 0, 'frame_width': 640, 'frame_height': 480}
-        ]
+        ],
+        condition=launch.conditions.IfCondition(use_real_camera) # <--- Condição para ativar/desativar
     )
-    
-    # NOVO: Nó para processar a imagem da câmera real
+
+    # Nó para processar a imagem da câmera real
     processor_node = Node(
         package='webcam_demo', # <--- Pacote do processador
         executable='processor', # <--- Executável do processador (definido em webcam_demo/setup.py)
@@ -115,11 +117,13 @@ def generate_launch_description():
         output='screen',
         parameters=[
             # Quaisquer parâmetros que o nó do processador possa precisar
-        ]
+        ],
+        condition=launch.conditions.IfCondition(use_real_camera) # <--- Geralmente processa a câmera real
     )
 
     # ESTE É O ÚNICO RETURN LaunchDescription. Ele inclui TODOS os argumentos e TODOS os nós.
     return LaunchDescription([
+        # Declaração dos argumentos de launch
         DeclareLaunchArgument(
             'use_jsp_gui',
             default_value='true',
@@ -130,13 +134,29 @@ def generate_launch_description():
             default_value='true',
             description='Set to "true" to launch RViz2'
         ),
+        DeclareLaunchArgument(
+            'use_fake_lidar',
+            default_value='true',
+            description='Set to "true" to use fake lidar; false to use real lidar (if configured)'
+        ),
+        DeclareLaunchArgument(
+            'use_fake_camera',
+            default_value='false',
+            description='Set to "true" to launch fake camera'
+        ),
+        DeclareLaunchArgument(
+            'use_real_camera',
+            default_value='true',
+            description='Set to "true" to launch real camera'
+        ),
+
+        # Inclusão dos nós (com suas condições)
         robot_state_publisher_node,
         joint_state_publisher_gui_node,
         rviz_node,
         simple_odom_publisher_node,
         fake_lidar_publisher_node,
         fake_camera_publisher_node,
-        real_camera_node, 
+        real_camera_node,
         processor_node,
     ])
-
