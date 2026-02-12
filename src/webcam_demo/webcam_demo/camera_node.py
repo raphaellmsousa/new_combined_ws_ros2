@@ -34,8 +34,10 @@ class CameraNode(Node):
             # 3. Processa frames (1ms é suficiente para manter o fluxo)
             cv2.waitKey(1)
 
-            self.get_logger().info('Frame publicado e exibido')
+            # Loga apenas na primeira vez que um frame é publicado e exibido com sucesso
+            self.get_logger().info('Primeiro frame da câmera publicado e exibido com sucesso!', once=True)
         else:
+            # Loga o aviso de falha na captura a cada vez que ocorre
             self.get_logger().warn('Falha ao capturar frame da webcam')
 
 def main(args=None):
@@ -55,4 +57,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

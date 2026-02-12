@@ -4,23 +4,34 @@
 # Obtém o diretório onde o script está localizado
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Assume que a raiz do workspace é o mesmo diretório do script
-# Se o script estiver em um subdiretório do workspace (ex: ~/my_ws/scripts/run.sh),
-# você precisaria ajustar WORKSPACE_ROOT para subir um nível:
-# WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+# --- Tenta localizar a raiz do workspace dinamicamente ---
+# Primeiro, assume que o script está na raiz do workspace
 WORKSPACE_ROOT="$SCRIPT_DIR"
+WORKSPACE_SETUP="$WORKSPACE_ROOT/install/setup.bash"
+
+# Se o setup.bash não for encontrado aqui, tenta subir um nível (caso o script esteja em um subdiretório como 'scripts/')
+if [ ! -f "$WORKSPACE_SETUP" ]; then
+    POTENTIAL_WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+    POTENTIAL_WORKSPACE_SETUP="$POTENTIAL_WORKSPACE_ROOT/install/setup.bash"
+    if [ -f "$POTENTIAL_WORKSPACE_SETUP" ]; then
+        WORKSPACE_ROOT="$POTENTIAL_WORKSPACE_ROOT"
+        WORKSPACE_SETUP="$POTENTIAL_WORKSPACE_SETUP"
+    else
+        # Se ainda não encontrou, pode tentar subir mais níveis ou emitir um erro.
+        # Por enquanto, vamos manter a lógica de erro mais abaixo.
+        echo "AVISO: Não foi possível encontrar 'install/setup.bash' em '$SCRIPT_DIR' nem em '$POTENTIAL_WORKSPACE_ROOT'."
+        echo "Por favor, verifique a estrutura do seu workspace ou a localização do script."
+    fi
+fi
 
 # Caminho para a instalação base do ROS 2 Jazzy
 ROS_DISTRO_SETUP="/opt/ros/jazzy/setup.bash"
-
-# Caminho para o setup do seu workspace ROS 2
-WORKSPACE_SETUP="$WORKSPACE_ROOT/install/setup.bash"
 
 # Nome do pacote principal do seu robô
 ROBOT_PACKAGE="robot_description_pkg"
 
 # Nome do launch file principal do seu robô
-ROBOT_LAUNCH_FILE="display_robot.launch.py" # <--- CORRIGIDO PARA O NOME CERTO
+ROBOT_LAUNCH_FILE="display_robot.launch.py"
 
 # Nome do pacote do RPLIDAR
 RPLIDAR_PACKAGE="rplidar_ros"
@@ -28,14 +39,16 @@ RPLIDAR_PACKAGE="rplidar_ros"
 # Parâmetros para o RPLIDAR (ajuste conforme necessário)
 RPLIDAR_SERIAL_PORT="/dev/ttyUSB0"
 RPLIDAR_BAUDRATE="115200"
-RPLIDAR_FRAME_ID="lidar_link" # <--- MUITO IMPORTANTE: Deve ser o mesmo do seu URDF!
+RPLIDAR_FRAME_ID="lidar_link"
 
 # --- Argumentos de Linha de Comando para o Script ---
 # Estes serão os valores padrão se não forem passados ao script
-USE_FAKE_LIDAR="true"
+USE_FAKE_LIDAR="true" # Caso true, o lidar real não vai rodar
 USE_FAKE_CAMERA="true"
-USE_REAL_CAMERA="false"
+USE_REAL_CAMERA="true"
 USE_RVIZ="true" # Adicionado para controle do RViz
+USE_JSP_GUI="true" # Reintroduzido para controle do joint_state_publisher_gui
+ROBOT_MODEL="default" # Adicionado para selecionar o modelo do robô
 
 # Processa os argumentos passados para este script
 while [[ "$#" -gt 0 ]]; do
@@ -48,10 +61,22 @@ while [[ "$#" -gt 0 ]]; do
         --no-real-camera) USE_REAL_CAMERA="false" ;;
         --rviz) USE_RVIZ="true" ;;
         --no-rviz) USE_RVIZ="false" ;;
-        *) echo "Uso: $0 [--fake-lidar|--no-fake-lidar] [--fake-camera|--no-fake-camera] [--real-camera|--no-real-camera] [--rviz|--no-rviz]"; exit 1 ;;
+        --jsp-gui) USE_JSP_GUI="true" ;;
+        --no-jsp-gui) USE_JSP_GUI="false" ;;
+        --robot-model=*) ROBOT_MODEL="${1#*=}" ;;
+        *) echo "Uso: $0 [--fake-lidar|--no-fake-lidar] [--fake-camera|--no-fake-camera] [--real-camera|--no-real-camera] [--rviz|--no-rviz] [--jsp-gui|--no-jsp-gui] [--robot-model=default|4_wheels]"; exit 1 ;;
     esac
     shift
 done
+
+# --- Seleciona o launch file com base no modelo do robô ---
+if [ "$ROBOT_MODEL" = "4_wheels" ]; then
+    ROBOT_LAUNCH_FILE="display_robot_4_wheels.launch.py"
+    echo "--- Usando o modelo de robô de 4 rodas ---"
+else
+    ROBOT_LAUNCH_FILE="display_robot.launch.py"
+    echo "--- Usando o modelo de robô padrão (2 rodas + castor) ---"
+fi
 
 # --- Execução ---
 
@@ -70,17 +95,18 @@ if [ -f "$WORKSPACE_SETUP" ]; then
     echo "Ambiente do workspace sourciado com sucesso."
 else
     echo "ERRO: Arquivo de setup do workspace não encontrado em $WORKSPACE_SETUP. Certifique-se de que o workspace foi compilado."
-    exit 1 # <--- SAÍDA AQUI, pois o launch file do robô não funcionará sem o workspace sourciado.
+    exit 1
 fi
 
 echo "--- Iniciando o sistema do robô (odometria, câmera, RViz, etc.) ---"
-echo "Configurações de sensores: Fake Lidar=$USE_FAKE_LIDAR, Fake Camera=$USE_FAKE_CAMERA, Real Camera=$USE_REAL_CAMERA, RViz=$USE_RVIZ"
+echo "Configurações de sensores: Fake Lidar=$USE_FAKE_LIDAR, Fake Camera=$USE_FAKE_CAMERA, Real Camera=$USE_REAL_CAMERA, RViz=$USE_RVIZ, JSP GUI=$USE_JSP_GUI, Modelo Robô=$ROBOT_MODEL"
 
 # Constrói a string de argumentos para o launch file
 LAUNCH_ARGS="use_fake_lidar:=$USE_FAKE_LIDAR \
              use_fake_camera:=$USE_FAKE_CAMERA \
              use_real_camera:=$USE_REAL_CAMERA \
-             use_rviz:=$USE_RVIZ"
+             use_rviz:=$USE_RVIZ \
+             use_jsp_gui:=$USE_JSP_GUI"
 
 # O comando ros2 launch é executado em segundo plano (&) para que o script possa continuar
 ros2 launch "$ROBOT_PACKAGE" "$ROBOT_LAUNCH_FILE" $LAUNCH_ARGS &
@@ -121,8 +147,6 @@ cleanup() {
 trap cleanup SIGINT
 
 # Espera pelos processos em segundo plano para que o script não termine imediatamente
-# O 'wait' é chamado dentro do trap para garantir que os processos sejam encerrados
-# antes do script terminar.
 wait $ROBOT_LAUNCH_PID
 if [ -n "$RPLIDAR_NODE_PID" ]; then
     wait $RPLIDAR_NODE_PID
