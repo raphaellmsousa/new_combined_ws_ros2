@@ -17,8 +17,6 @@ if [ ! -f "$WORKSPACE_SETUP" ]; then
         WORKSPACE_ROOT="$POTENTIAL_WORKSPACE_ROOT"
         WORKSPACE_SETUP="$POTENTIAL_WORKSPACE_SETUP"
     else
-        # Se ainda não encontrou, pode tentar subir mais níveis ou emitir um erro.
-        # Por enquanto, vamos manter a lógica de erro mais abaixo.
         echo "AVISO: Não foi possível encontrar 'install/setup.bash' em '$SCRIPT_DIR' nem em '$POTENTIAL_WORKSPACE_ROOT'."
         echo "Por favor, verifique a estrutura do seu workspace ou a localização do script."
     fi
@@ -30,8 +28,8 @@ ROS_DISTRO_SETUP="/opt/ros/jazzy/setup.bash"
 # Nome do pacote principal do seu robô
 ROBOT_PACKAGE="robot_description_pkg"
 
-# Nome do launch file principal do seu robô
-ROBOT_LAUNCH_FILE="display_robot.launch.py"
+# Nome do launch file principal do seu robô (será definido dinamicamente)
+ROBOT_LAUNCH_FILE="" # Inicializa vazio, será preenchido pela lógica de seleção
 
 # Nome do pacote do RPLIDAR
 RPLIDAR_PACKAGE="rplidar_ros"
@@ -46,9 +44,9 @@ RPLIDAR_FRAME_ID="lidar_link"
 USE_FAKE_LIDAR="true" # Caso true, o lidar real não vai rodar
 USE_FAKE_CAMERA="true"
 USE_REAL_CAMERA="true"
-USE_RVIZ="true" # Adicionado para controle do RViz
-USE_JSP_GUI="true" # Reintroduzido para controle do joint_state_publisher_gui
-ROBOT_MODEL="default" # Adicionado para selecionar o modelo do robô
+USE_RVIZ="true"
+USE_JSP_GUI="true"
+ROBOT_MODEL="rectangular" # Valor padrão para o robô circular
 
 # Processa os argumentos passados para este script
 while [[ "$#" -gt 0 ]]; do
@@ -64,18 +62,21 @@ while [[ "$#" -gt 0 ]]; do
         --jsp-gui) USE_JSP_GUI="true" ;;
         --no-jsp-gui) USE_JSP_GUI="false" ;;
         --robot-model=*) ROBOT_MODEL="${1#*=}" ;;
-        *) echo "Uso: $0 [--fake-lidar|--no-fake-lidar] [--fake-camera|--no-fake-camera] [--real-camera|--no-real-camera] [--rviz|--no-rviz] [--jsp-gui|--no-jsp-gui] [--robot-model=default|4_wheels]"; exit 1 ;;
+        *) echo "Uso: $0 [--fake-lidar|--no-fake-lidar] [--fake-camera|--no-fake-camera] [--real-camera|--no-real-camera] [--rviz|--no-rviz] [--jsp-gui|--no-jsp-gui] [--robot-model=circular|rectangular]"; exit 1 ;;
     esac
     shift
 done
 
-# --- Seleciona o launch file com base no modelo do robô ---
-if [ "$ROBOT_MODEL" = "4_wheels" ]; then
-    ROBOT_LAUNCH_FILE="display_robot_4_wheels.launch.py"
-    echo "--- Usando o modelo de robô de 4 rodas ---"
+# --- Lógica para selecionar o launch file com base no ROBOT_MODEL ---
+if [ "$ROBOT_MODEL" = "rectangular" ]; then
+    ROBOT_LAUNCH_FILE="display_robot_rectangular.launch.py"
+    echo "--- Selecionado: Robô Retangular ---"
+elif [ "$ROBOT_MODEL" = "circular" ]; then
+    ROBOT_LAUNCH_FILE="display_robot_circular.launch.py"
+    echo "--- Selecionado: Robô Circular ---"
 else
-    ROBOT_LAUNCH_FILE="display_robot.launch.py"
-    echo "--- Usando o modelo de robô padrão (2 rodas + castor) ---"
+    echo "ERRO: Modelo de robô '$ROBOT_MODEL' inválido. Use 'circular' ou 'rectangular'."
+    exit 1
 fi
 
 # --- Execução ---
@@ -85,7 +86,7 @@ if [ -f "$ROS_DISTRO_SETUP" ]; then
     source "$ROS_DISTRO_SETUP"
     echo "Ambiente ROS 2 Jazzy sourciado com sucesso."
 else
-    echo "ERRO: Arquivo de setup do ROS 2 Jazzy não encontrado em $ROS_DISTRO_SETUP"
+    echo "ERRO: Arquivo de setup do ROS 2 Jazzy não encontrado em $ROS_DISTRO_SETUP. Verifique sua instalação ROS."
     exit 1
 fi
 
@@ -102,6 +103,8 @@ echo "--- Iniciando o sistema do robô (odometria, câmera, RViz, etc.) ---"
 echo "Configurações de sensores: Fake Lidar=$USE_FAKE_LIDAR, Fake Camera=$USE_FAKE_CAMERA, Real Camera=$USE_REAL_CAMERA, RViz=$USE_RVIZ, JSP GUI=$USE_JSP_GUI, Modelo Robô=$ROBOT_MODEL"
 
 # Constrói a string de argumentos para o launch file
+# ATENÇÃO: O argumento 'robot_model' NÃO é mais passado para o launch file,
+# pois o launch file já é escolhido com base no modelo.
 LAUNCH_ARGS="use_fake_lidar:=$USE_FAKE_LIDAR \
              use_fake_camera:=$USE_FAKE_CAMERA \
              use_real_camera:=$USE_REAL_CAMERA \
